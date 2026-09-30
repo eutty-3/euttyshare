@@ -1,0 +1,62 @@
+{
+  "$schema": "https://firebase.google.com/schemas/firestore-blueprint/v1.json",
+  "entities": {
+    "users": {
+      "description": "User profiles authenticated via Firebase Auth",
+      "fields": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" },
+        "role": { "type": "string" }
+      }
+    },
+    "user_drops": {
+      "description": "Audit record of file transfers initiated by the user",
+      "fields": {
+        "userId": { "type": "string" },
+        "pin": { "type": "string" },
+        "sanitizedName": { "type": "string" },
+        "size": { "type": "number" },
+        "mimeType": { "type": "string" },
+        "sha256": { "type": "string" },
+        "burnAfterDownload": { "type": "boolean" },
+        "createdAt": { "type": "timestamp" },
+        "status": { "type": "string" }
+      }
+    },
+    "chat_sessions": {
+      "description": "Multi-turn Gemini security assistant conversations",
+      "fields": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "role": { "type": "string" },
+        "model": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "chat_messages": {
+      "description": "Individual messages in a chat thread",
+      "fields": {
+        "sessionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "role": { "type": "string" },
+        "content": { "type": "string" },
+        "sources": { "type": "array" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    "campus_alerts": {
+      "description": "Real-time campus cybersecurity bulletins and zero-day alerts",
+      "fields": {
+        "title": { "type": "string" },
+        "severity": { "type": "string" },
+        "summary": { "type": "string" },
+        "sources": { "type": "array" },
+        "publishedAt": { "type": "timestamp" }
+      }
+    }
+  }
+}

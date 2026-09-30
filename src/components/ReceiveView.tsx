@@ -14,7 +14,9 @@ import {
   Lock,
   ArrowRight,
   FileCheck,
-  ExternalLink
+  ExternalLink,
+  Zap,
+  Gauge
 } from 'lucide-react';
 import { CleanDrop } from '../types';
 import { formatBytes, formatTimeRemaining } from '../utils';
@@ -31,6 +33,8 @@ export const ReceiveView: React.FC<ReceiveViewProps> = ({ initialPin, onClearIni
   const [dropData, setDropData] = useState<CleanDrop | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [hasDownloaded, setHasDownloaded] = useState<boolean>(false);
+  const [autoDownload, setAutoDownload] = useState<boolean>(true);
+  const [downloadDurationMs, setDownloadDurationMs] = useState<number | null>(null);
 
   const inputRefs = [
     useRef<HTMLInputElement>(null),
@@ -63,11 +67,35 @@ export const ReceiveView: React.FC<ReceiveViewProps> = ({ initialPin, onClearIni
     return () => clearInterval(interval);
   }, [dropData]);
 
+  const executeDownload = (drop: CleanDrop) => {
+    const start = performance.now();
+    setHasDownloaded(true);
+
+    const downloadUrl = `/api/drop/download/${drop.pin}`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = drop.sanitizedName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    const elapsed = Math.max(1, Math.round(performance.now() - start));
+    setDownloadDurationMs(elapsed);
+
+    if (drop.burnAfterDownload) {
+      setTimeout(() => {
+        setDropData(null);
+        setErrorMsg('File burned! In accordance with the self-destruct setting, this file was purged immediately upon download.');
+      }, 1500);
+    }
+  };
+
   const fetchDrop = async (lookupPin: string) => {
     if (lookupPin.length < 4) return;
     setIsLoading(true);
     setErrorMsg(null);
     setHasDownloaded(false);
+    setDownloadDurationMs(null);
 
     try {
       const response = await fetch(`/api/drop/info/${lookupPin}`);
@@ -79,6 +107,11 @@ export const ReceiveView: React.FC<ReceiveViewProps> = ({ initialPin, onClearIni
 
       setDropData(data);
       setSecondsRemaining(data.secondsRemaining || 0);
+
+      // Turbo Auto-Download: Instantly trigger download without extra clicks
+      if (autoDownload && data.securityReport.status === 'clean') {
+        executeDownload(data);
+      }
     } catch (err: any) {
       setDropData(null);
       setErrorMsg(err.message || 'Unable to retrieve file. It may have expired or was burned.');
@@ -224,6 +257,33 @@ export const ReceiveView: React.FC<ReceiveViewProps> = ({ initialPin, onClearIni
               />
             );
           })}
+        </div>
+
+        {/* Turbo Mode Toggle */}
+        <div className="flex items-center justify-between p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 text-xs text-slate-300 mt-5 max-w-md mx-auto shadow-inner">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+              <Zap className={`w-4 h-4 ${autoDownload ? 'animate-pulse text-amber-400' : 'text-slate-500'}`} />
+            </div>
+            <div>
+              <span className="font-bold text-white flex items-center gap-1.5">
+                Turbo Auto-Download
+                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
+                  Fastest
+                </span>
+              </span>
+              <p className="text-[11px] text-slate-400">Starts download instantly when 4th digit is entered (0 clicks)</p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoDownload}
+              onChange={(e) => setAutoDownload(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
         </div>
 
         <div className="flex items-center justify-center gap-4 mt-6">
@@ -374,7 +434,7 @@ export const ReceiveView: React.FC<ReceiveViewProps> = ({ initialPin, onClearIni
           {/* Download Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <button
-              onClick={handleDownload}
+              onClick={() => executeDownload(dropData)}
               className="w-full sm:flex-1 py-3.5 px-6 rounded-xl font-extrabold text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:brightness-110 text-slate-950 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-98 transition-all"
             >
               <Download className="w-5 h-5" />
@@ -392,9 +452,17 @@ export const ReceiveView: React.FC<ReceiveViewProps> = ({ initialPin, onClearIni
           </div>
 
           {hasDownloaded && (
-            <div className="mt-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs text-center flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Download initiated! Check your browser's download directory.</span>
+            <div className="mt-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex flex-col sm:flex-row items-center justify-between gap-2 shadow-inner animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span className="font-semibold">Stream complete: File saved to this workstation!</span>
+              </div>
+              {downloadDurationMs !== null && (
+                <div className="flex items-center gap-1.5 font-mono text-[11px] bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Wire stream latency: <strong>{downloadDurationMs}ms</strong></span>
+                </div>
+              )}
             </div>
           )}
         </div>

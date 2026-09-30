@@ -1,12 +1,15 @@
 import express, { Request, Response } from 'express';
+import compression from 'compression';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
+import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 const app = express();
+app.use(compression());
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -513,14 +516,35 @@ app.get('/api/drop/download/:pinOrId', (req: Request, res: Response): void => {
     return;
   }
 
-  // Set strict download headers to prevent in-browser execution or MIME confusion
+  // Handle Range requests for accelerated chunked transfer
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : drop.size - 1;
+    const chunksize = end - start + 1;
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${drop.size}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': drop.mimeType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(drop.sanitizedName)}"`,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    });
+    fs.createReadStream(filePath, { start, end, highWaterMark: 256 * 1024 }).pipe(res);
+    return;
+  }
+
+  // Set strict high-performance download headers
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(drop.sanitizedName)}"`);
   res.setHeader('Content-Type', drop.mimeType || 'application/octet-stream');
   res.setHeader('Content-Length', drop.size);
+  res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
 
-  const fileStream = fs.createReadStream(filePath);
+  const fileStream = fs.createReadStream(filePath, { highWaterMark: 256 * 1024 });
   fileStream.pipe(res);
 
   drop.downloadCount++;
@@ -642,6 +666,183 @@ app.get('/api/stats', (_req: Request, res: Response): void => {
 app.post('/api/drops/purge-expired', (_req: Request, res: Response): void => {
   cleanupExpiredDrops();
   res.json({ success: true, activeRemaining: drops.size });
+});
+
+// Initialize Gemini AI Client
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    },
+  },
+});
+
+// Gemini Multi-Turn Security Chat with Search Grounding
+app.post('/api/gemini/chat', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { messages, model, systemInstruction, enableSearchGrounding } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      res.status(400).json({ error: 'Messages array is required.' });
+      return;
+    }
+
+    // Select authorized models: gemini-3.5-flash (general & search), gemini-3.1-flash-lite (fast), gemini-3.1-pro-preview (complex)
+    let selectedModel = 'gemini-3.5-flash';
+    if (model === 'gemini-3.1-flash-lite' || model === 'gemini-3.1-pro-preview' || model === 'gemini-3.5-flash') {
+      selectedModel = model;
+    }
+
+    const defaultRoleInstruction =
+      'You are the Campus Cyber Defense Sentinel & Safe Transfer Advisor for CleanDrop. ' +
+      'Your mission is to help university students, lab assistants, and researchers maintain zero-trust cybersecurity ' +
+      'in public computer labs, prevent USB-borne malware (e.g. Raspberry Robin, BadUSB, autorun worms), ' +
+      'and safely transfer documents, research data, code, and assignments. ' +
+      'Provide concise, actionable, and technically rigorous explanations. When search grounding is enabled, cite authoritative security bulletins.';
+
+    const config: any = {
+      systemInstruction: systemInstruction || defaultRoleInstruction,
+    };
+
+    // Google Search Grounding: Required for up-to-date and accurate live threat intelligence
+    if (enableSearchGrounding !== false) {
+      config.tools = [{ googleSearch: {} }];
+    }
+
+    // Map conversation history to Gemini parts
+    const contents = messages.map((m: { role: string; content: string }) => ({
+      role: m.role === 'model' || m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: String(m.content || '') }],
+    }));
+
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: selectedModel,
+        contents,
+        config,
+      });
+    } catch (apiErr: any) {
+      // If search grounding fails or hits quota, gracefully fallback
+      console.warn('Model or search tool encountered error, falling back:', apiErr?.message);
+      try {
+        const fallbackConfig = { ...config, tools: undefined };
+        response = await ai.models.generateContent({
+          model: selectedModel,
+          contents,
+          config: fallbackConfig,
+        });
+      } catch (innerErr) {
+        // Further fallback to gemini-3.1-flash-lite if 3.5 is exhausted
+        const fallbackConfig = { ...config, tools: undefined };
+        response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents,
+          config: fallbackConfig,
+        });
+        selectedModel = 'gemini-3.1-flash-lite';
+      }
+    }
+
+    const reply = response.text || '';
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const sources: Array<{ uri: string; title: string }> = [];
+
+    if (Array.isArray(groundingChunks)) {
+      for (const chunk of groundingChunks) {
+        if (chunk.web && chunk.web.uri) {
+          sources.push({
+            uri: chunk.web.uri,
+            title: chunk.web.title || chunk.web.uri,
+          });
+        }
+      }
+    }
+
+    res.json({
+      reply,
+      sources,
+      modelUsed: selectedModel,
+      grounded: sources.length > 0,
+    });
+  } catch (error: any) {
+    console.error('Gemini Chat error:', error);
+    res.status(500).json({
+      error: error.message || 'An error occurred while contacting the Gemini AI security engine.',
+    });
+  }
+});
+
+// Gemini Live Threat & CVE Search Grounding Endpoint
+app.post('/api/gemini/live-threat-lookup', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { query } = req.body;
+    if (!query || typeof query !== 'string') {
+      res.status(400).json({ error: 'Search query string is required.' });
+      return;
+    }
+
+    const prompt = `Provide an authoritative, up-to-date cybersecurity threat assessment on: "${query}". ` +
+      `Highlight practical defense steps for campus computer workstations and lab students.`;
+
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          systemInstruction: 'You are an authoritative cybersecurity analyst specializing in malware forensics and zero-day threat analysis.',
+        },
+      });
+    } catch (searchErr) {
+      console.warn('Threat lookup search tool fallback:', searchErr);
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: prompt,
+          config: {
+            systemInstruction: 'You are an authoritative cybersecurity analyst specializing in malware forensics and zero-day threat analysis.',
+          },
+        });
+      } catch (quotaErr) {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: prompt,
+          config: {
+            systemInstruction: 'You are an authoritative cybersecurity analyst specializing in malware forensics and zero-day threat analysis.',
+          },
+        });
+      }
+    }
+
+    const reply = response.text || '';
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const sources: Array<{ uri: string; title: string }> = [];
+
+    if (Array.isArray(groundingChunks)) {
+      for (const chunk of groundingChunks) {
+        if (chunk.web && chunk.web.uri) {
+          sources.push({
+            uri: chunk.web.uri,
+            title: chunk.web.title || chunk.web.uri,
+          });
+        }
+      }
+    }
+
+    res.json({
+      intel: reply,
+      sources,
+      timestamp: Date.now(),
+    });
+  } catch (error: any) {
+    console.error('Live Threat Lookup error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to retrieve live grounded threat intelligence.',
+    });
+  }
 });
 
 // Start Server with Vite mounting in Dev

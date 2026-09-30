@@ -9,11 +9,14 @@ import { UploadView } from './components/UploadView';
 import { ReceiveView } from './components/ReceiveView';
 import { LabRadarView } from './components/LabRadarView';
 import { SecurityGuideView } from './components/SecurityGuideView';
-import { CampusStats, CleanDrop } from './types';
+import { GeminiChatView } from './components/GeminiChatView';
+import { UserVaultView } from './components/UserVaultView';
+import { CampusStats, CleanDrop, ActiveTab } from './types';
 import { ShieldCheck, HardDrive, Lock, Terminal, Radio } from 'lucide-react';
+import { AuthProvider } from './context/AuthContext';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<'upload' | 'receive' | 'radar' | 'guide'>('upload');
+function AppContent() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('upload');
   const [stats, setStats] = useState<CampusStats | null>(null);
   const [targetPin, setTargetPin] = useState<string>('');
 
@@ -72,6 +75,8 @@ export default function App() {
             <span className="text-emerald-400 font-medium">Zero Disk Execution</span>
             <span className="text-slate-600">•</span>
             <span className="text-cyan-400 font-medium">ClamAV Heuristic Engine</span>
+            <span className="text-slate-600 hidden md:inline">•</span>
+            <span className="text-amber-300 font-medium hidden md:inline">Gemini Grounded Intelligence</span>
           </div>
         </div>
       </div>
@@ -89,7 +94,7 @@ export default function App() {
       />
 
       {/* Main Tab Content */}
-      <main className="flex-1">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {activeTab === 'upload' && (
           <UploadView
             onDropCreated={handleDropCreated}
@@ -116,6 +121,12 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'chat' && <GeminiChatView />}
+
+        {activeTab === 'vault' && (
+          <UserVaultView onNavigateToUpload={() => setActiveTab('upload')} />
+        )}
+
         {activeTab === 'guide' && <SecurityGuideView />}
       </main>
 
@@ -135,6 +146,13 @@ export default function App() {
             <span>Max Payload: 50MB</span>
             <span>•</span>
             <button
+              onClick={() => setActiveTab('chat')}
+              className="text-cyan-400 hover:underline"
+            >
+              Ask Sentinel AI
+            </button>
+            <span>•</span>
+            <button
               onClick={() => setActiveTab('guide')}
               className="text-emerald-400 hover:underline"
             >
@@ -144,5 +162,13 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

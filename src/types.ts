@@ -35,6 +35,8 @@ export interface CleanDrop {
   qrCodeDataUrl?: string;
   downloadUrl: string;
   secondsRemaining?: number;
+  uploadDurationMs?: number;
+  transferSpeedMbps?: number;
 }
 
 export interface ActiveDropSummary {
@@ -64,3 +66,5 @@ export interface CampusStats {
   defaultRetentionMinutes: number;
   maxUploadSizeMb: number;
 }
+
+export type ActiveTab = 'upload' | 'receive' | 'radar' | 'chat' | 'vault' | 'guide';

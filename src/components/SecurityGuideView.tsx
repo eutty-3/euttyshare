@@ -191,6 +191,121 @@ export const SecurityGuideView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Google Search Grounded Threat Intelligence Widget */}
+      <ThreatIntelWidget />
     </div>
   );
 };
+
+const ThreatIntelWidget: React.FC = () => {
+  const [query, setQuery] = React.useState<string>('Raspberry Robin USB malware campus threats');
+  const [intel, setIntel] = React.useState<string | null>(null);
+  const [sources, setSources] = React.useState<Array<{ uri: string; title: string }>>([]);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const fetchIntel = async (searchQuery: string) => {
+    if (!searchQuery.trim() || loading) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/gemini/live-threat-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to lookup threat intelligence.');
+      setIntel(data.intel);
+      setSources(data.sources || []);
+    } catch (err: any) {
+      setError(err.message || 'Lookup failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-8 bg-slate-900 border border-blue-500/30 rounded-2xl p-6 sm:p-8 shadow-xl">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
+          <Radio className="w-5 h-5 animate-pulse" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-white">Live Threat Intelligence & CVE Grounding</h3>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+              gemini-3.5-flash + Google Search
+            </span>
+          </div>
+          <p className="text-xs text-slate-400">
+            Real-time web search grounding for emerging flash drive worms, PDF vulnerabilities, and campus advisories.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && fetchIntel(query)}
+          placeholder="e.g. Raspberry Robin worm, CVE shortcut exploits, campus USB malware..."
+          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+        />
+        <button
+          onClick={() => fetchIntel(query)}
+          disabled={loading}
+          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50"
+        >
+          {loading ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              <span>Grounding Search...</span>
+            </>
+          ) : (
+            <span>Search Live Advisories</span>
+          )}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+          {error}
+        </div>
+      )}
+
+      {intel && (
+        <div className="mt-5 p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4 animate-in fade-in">
+          <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+            {intel}
+          </div>
+
+          {sources.length > 0 && (
+            <div className="pt-3 border-t border-slate-800/80">
+              <div className="text-[11px] font-semibold text-blue-400 mb-2">
+                Authoritative Google Search Citations:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sources.map((src, i) => (
+                  <a
+                    key={i}
+                    href={src.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-950/40 hover:bg-blue-900/40 border border-blue-800/30 text-[11px] text-blue-300 hover:text-white transition-colors"
+                  >
+                    <span>{src.title || src.uri}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+

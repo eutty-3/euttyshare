@@ -1,0 +1,6 @@
+{
+  "name": "CleanDrop - Campus Secure File Portal",
+  "description": "Zero-USB secure campus file transfer with 4-digit PINs, antivirus inspection, and automatic 10-minute ephemerality.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

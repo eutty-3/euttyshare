@@ -112,6 +112,7 @@ export default function App() {
             stats={stats}
             onRefreshStats={fetchStats}
             onSelectPinToReceive={handleSelectPinToReceive}
+            onNavigateToSend={() => setActiveTab('upload')}
           />
         )}
 

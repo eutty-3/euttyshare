@@ -8,7 +8,7 @@ import {
   HardDrive,
   Trash2,
   RefreshCw,
-  Sparkles,
+  Upload,
   Download,
   AlertCircle,
   Cpu,
@@ -23,16 +23,17 @@ interface LabRadarViewProps {
   stats: CampusStats | null;
   onRefreshStats: () => void;
   onSelectPinToReceive: (pin: string) => void;
+  onNavigateToSend?: () => void;
 }
 
 export const LabRadarView: React.FC<LabRadarViewProps> = ({
   stats,
   onRefreshStats,
   onSelectPinToReceive,
+  onNavigateToSend,
 }) => {
   const [activeDrops, setActiveDrops] = useState<ActiveDropSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSeeding, setIsSeeding] = useState<boolean>(false);
   const [notification, setNotification] = useState<string | null>(null);
 
   const fetchActiveDrops = async () => {
@@ -54,24 +55,6 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
     }, 4000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleSeedDemos = async () => {
-    setIsSeeding(true);
-    try {
-      const res = await fetch('/api/demo/seed', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setNotification('Sample campus documents staged for quick testing!');
-        fetchActiveDrops();
-        onRefreshStats();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSeeding(false);
-      setTimeout(() => setNotification(null), 3000);
-    }
-  };
 
   const handlePurgeExpired = async () => {
     try {
@@ -116,14 +99,15 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleSeedDemos}
-            disabled={isSeeding}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all inline-flex items-center gap-1.5 shadow-sm"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isSeeding ? 'Seeding...' : 'Load Sample Drops'}</span>
-          </button>
+          {onNavigateToSend && (
+            <button
+              onClick={onNavigateToSend}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold transition-all inline-flex items-center gap-1.5 shadow-sm"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Send New File</span>
+            </button>
+          )}
 
           <button
             onClick={handlePurgeExpired}
@@ -161,7 +145,7 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
-            {stats ? stats.usbsAvoided.toLocaleString() : '142'}
+            {stats ? stats.usbsAvoided.toLocaleString() : '0'}
           </div>
           <div className="text-[11px] text-emerald-400 mt-1 font-medium">
             Zero physical flash drives infected
@@ -174,10 +158,10 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
             <HardDrive className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
-            {stats ? formatBytes(stats.totalBytesCleaned) : '1.8 GB'}
+            {stats ? formatBytes(stats.totalBytesCleaned) : '0 B'}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Over {stats ? stats.totalTransfers : 142} safe drops
+            Over {stats ? stats.totalTransfers : 0} safe drops
           </div>
         </div>
 
@@ -187,7 +171,7 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
             <ShieldAlert className="w-4 h-4 text-rose-400" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 font-mono">
-            {stats ? stats.threatsIntercepted : '19'}
+            {stats ? stats.threatsIntercepted : '0'}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
             Worms & disguised .exe blocked
@@ -200,7 +184,7 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
             <Clock className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-amber-300 font-mono">
-            {stats ? stats.autoPurgedCount : '138'}
+            {stats ? stats.autoPurgedCount : '0'}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
             Strict 10-minute wipe cycle
@@ -229,14 +213,16 @@ export const LabRadarView: React.FC<LabRadarViewProps> = ({
             </div>
             <h3 className="text-white font-semibold text-base">No active drops in campus transit</h3>
             <p className="text-slate-400 text-sm max-w-sm mx-auto mt-1 mb-4">
-              All previous drops have been automatically purged or downloaded. Upload a file or seed sample drops.
+              All previous drops have been automatically purged or downloaded. Upload a file to generate a 4-digit PIN.
             </p>
-            <button
-              onClick={handleSeedDemos}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs inline-flex items-center gap-1.5 transition-colors"
-            >
-              <Sparkles className="w-4 h-4" /> Load Sample Lab Documents
-            </button>
+            {onNavigateToSend && (
+              <button
+                onClick={onNavigateToSend}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs inline-flex items-center gap-1.5 transition-colors"
+              >
+                <Upload className="w-4 h-4" /> Send a File Now
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

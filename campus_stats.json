@@ -1,7 +1,7 @@
 {
-  "totalTransfers": 143,
-  "totalBytesCleaned": 1845209000,
-  "threatsIntercepted": 20,
-  "usbsAvoided": 143,
-  "autoPurgedCount": 139
+  "totalTransfers": 1,
+  "totalBytesCleaned": 37,
+  "threatsIntercepted": 0,
+  "usbsAvoided": 1,
+  "autoPurgedCount": 1
 }

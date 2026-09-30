@@ -127,24 +127,6 @@ export const UploadView: React.FC<UploadViewProps> = ({ onDropCreated, onNavigat
     }
   };
 
-  // Helper to test with safe EICAR test string
-  const testEicarMalwareDetection = () => {
-    const eicarPayload = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
-    const blob = new Blob([eicarPayload], { type: 'text/plain' });
-    const testFile = new File([blob], 'EICAR_Standard_Antivirus_Test.com', { type: 'text/plain' });
-    setSelectedFile(testFile);
-    setNote('Security Test: EICAR malware signature detection trial');
-  };
-
-  // Helper to load sample student document
-  const loadSampleLabPdf = () => {
-    const content = '%PDF-1.4\n%âãÏÓ\nCampus Chemistry Lab Report 04 - CleanDrop Portal Demo\nVerified non-executable research document.';
-    const blob = new Blob([content], { type: 'application/pdf' });
-    const testFile = new File([blob], 'Chemistry_Lab_Report_04.pdf', { type: 'application/pdf' });
-    setSelectedFile(testFile);
-    setNote('Lab Room 204 - Student Bench 3');
-  };
-
   const copyPinToClipboard = () => {
     if (!createdDrop) return;
     navigator.clipboard.writeText(createdDrop.pin);
@@ -471,28 +453,6 @@ export const UploadView: React.FC<UploadViewProps> = ({ onDropCreated, onNavigat
                   </p>
                 </div>
               )}
-            </div>
-
-            {/* Quick Demo Pre-load buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
-              <span className="font-mono text-[11px] uppercase text-slate-500">Quick Test Options:</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={loadSampleLabPdf}
-                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors inline-flex items-center gap-1"
-                >
-                  <FileText className="w-3 h-3 text-cyan-400" /> Sample Lab Report PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={testEicarMalwareDetection}
-                  className="px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-colors inline-flex items-center gap-1"
-                  title="Tests heuristic antivirus detection with the standard safe EICAR antivirus test file"
-                >
-                  <Bug className="w-3 h-3 text-rose-400" /> Test EICAR Scanner
-                </button>
-              </div>
             </div>
 
             {/* Transfer Options */}

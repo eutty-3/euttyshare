@@ -27,11 +27,11 @@ interface CampusStats {
 
 const STATS_FILE = path.resolve(process.cwd(), 'campus_stats.json');
 let stats: CampusStats = {
-  totalTransfers: 142,
-  totalBytesCleaned: 1845209000,
-  threatsIntercepted: 19,
-  usbsAvoided: 142,
-  autoPurgedCount: 138,
+  totalTransfers: 0,
+  totalBytesCleaned: 0,
+  threatsIntercepted: 0,
+  usbsAvoided: 0,
+  autoPurgedCount: 0,
 };
 
 if (fs.existsSync(STATS_FILE)) {
@@ -636,69 +636,6 @@ app.get('/api/stats', (_req: Request, res: Response): void => {
     defaultRetentionMinutes: 10,
     maxUploadSizeMb: 50,
   });
-});
-
-// Seed / Demo endpoint to generate safe demo drops if none exist (for immediate testing in library/lab)
-app.post('/api/demo/seed', async (_req: Request, res: Response): Promise<void> => {
-  try {
-    const samples = [
-      {
-        name: 'CS412_Algorithm_Assignment_Draft.pdf',
-        content: '%PDF-1.4\n%âãÏÓ\n1 0 obj\n<<\n/Title (Campus Clean Drop Demo Document)\n/Author (CS Faculty)\n>>\nendobj\ntrailer\n<<\n/Root 1 0 R\n>>\n%%EOF',
-        mime: 'application/pdf',
-        note: 'Lecture Notes for Lab Room 302',
-      },
-      {
-        name: 'Chemistry_Lab_Results_Week4.csv',
-        content: 'sample_id,temperature_c,ph_level,reaction_rate,verified\n101,24.5,7.1,0.042,TRUE\n102,24.8,6.9,0.044,TRUE\n103,25.1,7.2,0.041,TRUE\n',
-        mime: 'text/csv',
-        note: 'Shared for Chemistry workstation 12',
-      },
-    ];
-
-    const created = [];
-    for (const sample of samples) {
-      const buffer = Buffer.from(sample.content, 'utf-8');
-      const sanitizedName = sanitizeFilename(sample.name);
-      const securityReport = inspectFileSecurity(buffer, sanitizedName, sample.mime);
-      const id = crypto.randomUUID();
-      const pin = generateUniquePin();
-      const diskFileName = `${id}.dat`;
-      fs.writeFileSync(path.join(UPLOADS_DIR, diskFileName), buffer, { mode: 0o600 });
-
-      const now = Date.now();
-      const expiresAt = now + 10 * 60 * 1000;
-      const appUrl = process.env.APP_URL || 'http://localhost:3000';
-      const qrCodeDataUrl = await QRCode.toDataURL(`${appUrl}/?pin=${pin}`, { margin: 1, width: 256 });
-
-      const drop: CleanDrop = {
-        id,
-        pin,
-        originalName: sample.name,
-        sanitizedName,
-        diskFileName,
-        size: buffer.length,
-        mimeType: sample.mime,
-        createdAt: now,
-        expiresAt,
-        durationMinutes: 10,
-        burnAfterDownload: false,
-        downloadCount: 0,
-        note: sample.note,
-        uploaderIpMasked: '10.240.*.42',
-        securityReport,
-        qrCodeDataUrl,
-      };
-
-      drops.set(id, drop);
-      pinIndex.set(pin, id);
-      created.push({ pin: drop.pin, name: drop.sanitizedName });
-    }
-
-    res.json({ success: true, created });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // Purge all expired drops trigger
